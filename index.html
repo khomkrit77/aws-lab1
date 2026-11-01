@@ -118,7 +118,7 @@
   function atCenter(e) { return e.progress===0; }
   function moveEntity(e,dir,speed,dt) {
     e.progress += speed*dt;
-    while(e.progress>=TILE) { e.x+=dir.x;e.y+=dir.y;e.progress-=TILE; }
+    if(e.progress>=TILE) { e.x+=dir.x;e.y+=dir.y;e.progress=0; }
   }
   function chooseGhostDir(g) {
     const options=Object.values(dirs).filter(d=>walkable(g.x+d.x,g.y+d.y) && !(d.x===-g.dir.x&&d.y===-g.dir.y));
