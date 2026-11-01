@@ -439,7 +439,7 @@ $("loginForm").addEventListener("submit",function(event){
  event.preventDefault();const name=$("accountName").value.trim(),diff=$("difficulty").value;
  setError($("loginError"),"");
  api("/api/profile",{method:"POST",body:JSON.stringify({name:name,difficulty:diff})})
- .then(function(result){profile=result;localStorage.setItem("mazeMunchName",profile.name);localStorage.setItem("mazeMunchDifficulty",profile.difficulty);showGame();renderProfile();refreshProgress();startLevel(profile.unlockedLevel)})
+ .then(function(result){profile=result;localStorage.setItem("mazeMunchName",profile.name);localStorage.setItem("mazeMunchDifficulty",profile.difficulty);refreshLeaderboard();showGame();renderProfile();refreshProgress();startLevel(profile.unlockedLevel)})
  .catch(function(error){setError($("loginError"),error.message+" · ตรวจว่า container ทำงานอยู่")});
 });
 $("primaryBtn").addEventListener("click",function(){if(overlayAction)overlayAction()});
