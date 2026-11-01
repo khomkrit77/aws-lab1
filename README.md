@@ -1,8 +1,37 @@
 # Maze Munch
 
-A small, self-contained arcade maze game built with HTML, CSS, and JavaScript. No build tools, packages, or external assets are required.
+A small arcade maze game built with HTML, CSS, and JavaScript. The game is served by Nginx inside a Docker container; no Node.js runtime or external assets are needed.
 
-## Play
+## Run with Docker Compose
+
+Install Docker Desktop (Mac/Windows) or Docker Engine with the Docker Compose plugin (Linux), then run from this repository:
+
+```bash
+docker compose up -d --build
+```
+
+Open [http://localhost:8083](http://localhost:8083).
+
+To use a different host port:
+
+```bash
+APP_PORT=8090 docker compose up -d --build
+```
+
+Stop the container:
+
+```bash
+docker compose down
+```
+
+Check status and logs:
+
+```bash
+docker compose ps
+docker compose logs -f
+```
+
+## Run directly without Docker
 
 Open `index.html` in a modern browser, or serve the repository locally:
 
