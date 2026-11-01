@@ -253,23 +253,13 @@ function distanceMap(sx,sy){
  }
  return dist;
 }
-function routeDirection(sx,sy,tx,ty){
- if(!walkable(tx,ty))return null;
- const start=key(sx,sy),goal=key(tx,ty);
- if(start===goal)return null;
- const queue=[{x:sx,y:sy}],came=new Map([[start,null]]);
- for(let i=0;i<queue.length;i++){
-  const p=queue[i],pk=key(p.x,p.y);
-  if(pk===goal)break;
-  for(const d of Object.values(dirs)){
-   const x=p.x+d.x,y=p.y+d.y,k=key(x,y);
-   if(walkable(x,y)&&!came.has(k)){came.set(k,{from:pk,dir:d});queue.push({x:x,y:y})}
-  }
- }
- if(!came.has(goal))return null;
- let node=goal,step=came.get(node);
- while(step&&step.from!==start){node=step.from;step=came.get(node)}
- return step?step.dir:null;
+function bestChaseStep(g,target){
+ if(!walkable(target.x,target.y))target={x:player.x,y:player.y};
+ const distances=distanceMap(target.x,target.y);
+ const options=Object.values(dirs).filter(function(d){return walkable(g.x+d.x,g.y+d.y)&&!(d.x===-g.dir.x&&d.y===-g.dir.y)});
+ if(!options.length)return {x:-g.dir.x,y:-g.dir.y};
+ options.sort(function(a,b){return (distances.get(key(g.x+a.x,g.y+a.y))||999)-(distances.get(key(g.x+b.x,g.y+b.y))||999)});
+ return options[0];
 }
 function predictedPlayer(steps){
  let x=player.x,y=player.y;
@@ -300,14 +290,8 @@ function chooseGhostDir(g){
   return options[0];
  }
  const target=ghostTarget(g);
- let choice=null,best=Infinity;
- for(const d of options){
-  const next={x:g.x+d.x,y:g.y+d.y};
-  const route=routeDirection(next.x,next.y,target.x,target.y);
-  if(next.x===target.x&&next.y===target.y)return d;
-  if(route){const dist=Math.abs(next.x-target.x)+Math.abs(next.y-target.y);if(dist<best){best=dist;choice=d}}
- }
- if(choice&&Math.random()<(difficulty()==="hard"?.95:.82))return choice;
+ const chase=bestChaseStep(g,target);
+ if(chase&&Math.random()<(difficulty()==="hard"?.97:.88))return chase;
  return options[Math.floor(Math.random()*options.length)];
 }
 function playTone(freq,duration,type){
@@ -406,7 +390,7 @@ $("loginForm").addEventListener("submit",function(event){
  event.preventDefault();const name=$("accountName").value.trim(),diff=$("difficulty").value;
  setError($("loginError"),"");
  api("/api/profile",{method:"POST",body:JSON.stringify({name:name,difficulty:diff})})
- .then(function(result){profile=result;localStorage.setItem("mazeMunchName",profile.name);localStorage.setItem("mazeMunchDifficulty",profile.difficulty);showGame();renderProfile();refreshProgress();updateLevelOptions();startLevel(profile.unlockedLevel)})
+ .then(function(result){profile=result;localStorage.setItem("mazeMunchName",profile.name);localStorage.setItem("mazeMunchDifficulty",profile.difficulty);showGame();renderProfile();refreshProgress();startLevel(profile.unlockedLevel)})
  .catch(function(error){setError($("loginError"),error.message+" · ตรวจว่า container ทำงานอยู่")});
 });
 $("primaryBtn").addEventListener("click",function(){if(overlayAction)overlayAction()});
