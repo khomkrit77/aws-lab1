@@ -81,6 +81,21 @@ kbd{color:#dbe5ff;background:#141e38;border:1px solid #34466e;border-bottom-widt
  .mobile button{font-size:14px}
  .help{min-height:16px}
 }
+ .leaderboard{border:1px solid #26385f;border-radius:12px;background:#0b1328;padding:10px 12px;margin-top:12px}
+.leaderboard-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
+.leaderboard h3{font-size:14px;margin:0;color:#f1f5ff}
+.leaderboard-head button{padding:4px 9px;font-size:12px}
+.leaderboard-scroll{max-height:min(19svh,150px);overflow:auto}
+.leaderboard table{width:100%;border-collapse:collapse;font-size:11px}
+.leaderboard th,.leaderboard td{padding:5px 4px;text-align:left;border-bottom:1px solid #1f2d4b}
+.leaderboard th{position:sticky;top:0;background:#0b1328;color:var(--muted);font-weight:600}
+.leaderboard td:last-child,.leaderboard th:last-child{text-align:right;font-variant-numeric:tabular-nums}
+.leaderboard tr.me td{color:#ffe27a;font-weight:700}
+.leaderboard-status{min-height:15px;color:var(--muted);font-size:11px;margin-top:4px}
+.pause-actions{display:grid;gap:8px;margin-top:8px}
+.pause-actions .primary{width:100%;border:0;background:linear-gradient(110deg,#ffdc50,#ffa930);color:#171c2d;font-weight:900}
+.pause-actions .exit{width:100%;background:#311c35;border-color:#73425e}
+@media(max-width:650px){.leaderboard-scroll{max-height:14svh}.leaderboard{padding:8px 10px;margin-top:8px}}
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{transition:none!important}}
 </style>
 </head>
@@ -103,6 +118,9 @@ kbd{color:#dbe5ff;background:#141e38;border:1px solid #34466e;border-bottom-widt
     <div class="overlay hidden" id="overlay">
       <div class="card"><h2 id="overlayTitle"></h2><p id="overlayText"></p><button class="primary" id="primaryBtn" type="button"></button><div class="secondary-actions"><button id="retryBtn" type="button">เริ่มด่านนี้ใหม่</button><button id="menuBtn" type="button">บัญชี / เมนู</button></div></div>
     </div>
+    <div class="overlay hidden" id="pauseOverlay" aria-label="เมนูหยุดเกม">
+      <div class="card"><h2>หยุดชั่วคราว</h2><p>เกมหยุดอยู่ คุณจะกลับไปเล่นต่อหรือออกไปหน้าแรกก็ได้</p><div class="pause-actions"><button class="primary" id="resumeBtn" type="button">เล่นต่อ</button><button class="exit" id="exitGameBtn" type="button">ออกไปหน้าแรก</button></div></div>
+    </div>
   </div>
   <div class="help"><span>เดิน <span class="keys"><kbd>↑</kbd><kbd>←</kbd><kbd>↓</kbd><kbd>→</kbd></span> หรือ <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> · <kbd>Space</kbd> หยุดชั่วคราว</span><span>ลูกแก้วทองทำให้ผีหนี · ไม่มีเวลานับถอยหลัง</span></div>
   <div class="mobile" aria-label="ปุ่มควบคุมบนมือถือ">
@@ -117,6 +135,11 @@ kbd{color:#dbe5ff;background:#141e38;border:1px solid #34466e;border-bottom-widt
     <div class="field"><label for="accountName">ชื่อบัญชีผู้เล่น</label><input id="accountName" name="name" maxlength="24" autocomplete="nickname" placeholder="เช่น account1" required></div>
     <div class="field"><label for="difficulty">ระดับความยาก</label><select id="difficulty" name="difficulty"><option value="easy">ง่าย — ผีช้าลง มี 4 ชีวิต</option><option value="normal" selected>ปกติ — สมดุล มี 3 ชีวิต</option><option value="hard">ยาก — ผีเร็วและไล่แม่น มี 2 ชีวิต</option></select></div>
     <div class="progress-box" id="progressText">ใช้ชื่อเดิมเพื่อกลับมาเล่นต่อจากด่านที่ปลดล็อกล่าสุด</div>
+    <section class="leaderboard" aria-labelledby="leaderboardTitle">
+      <div class="leaderboard-head"><h3 id="leaderboardTitle">อันดับผู้เล่นทั้งหมด</h3><button id="refreshBoardBtn" type="button" aria-label="โหลดอันดับใหม่">↻</button></div>
+      <div class="leaderboard-scroll"><table><thead><tr><th>อันดับ</th><th>ผู้เล่น</th><th>ผ่าน</th><th>คะแนนรวม</th></tr></thead><tbody id="leaderboardBody"></tbody></table></div>
+      <div class="leaderboard-status" id="leaderboardStatus" aria-live="polite">กำลังโหลดอันดับ…</div>
+    </section>
     <button class="primary" type="submit">เข้าเล่น / เล่นต่อ</button>
     <div class="error" id="loginError" role="status"></div>
     <p class="account-note">เดโมนี้ใช้ชื่อผู้เล่นเพื่อค้นหาคะแนน ไม่มีรหัสผ่าน ข้อมูลจะเก็บในฐานข้อมูลของ container เครื่องนี้</p>
@@ -172,6 +195,24 @@ function api(path,options){
  });
 }
 function setError(el,message){el.textContent=message||""}
+function refreshLeaderboard(){
+ const body=$("leaderboardBody"),status=$("leaderboardStatus");
+ if(!body||!status)return Promise.resolve();
+ body.replaceChildren();status.textContent="กำลังโหลดอันดับ…";
+ return api("/api/leaderboard").then(function(rows){
+  body.replaceChildren();
+  if(!rows.length){status.textContent="ยังไม่มีผู้เล่น";return}
+  status.textContent="คะแนนรวม = ผลรวมคะแนนสูงสุดของแต่ละด่าน";
+  rows.forEach(function(row){
+   const tr=document.createElement("tr");
+   if(profile&&profile.name.toLowerCase()===row.name.toLowerCase())tr.classList.add("me");
+   [row.rank,row.name,row.clearedLevels,row.totalScore].forEach(function(value){
+    const td=document.createElement("td");td.textContent=String(value);tr.appendChild(td);
+   });
+   body.appendChild(tr);
+  });
+ }).catch(function(){status.textContent="โหลดอันดับไม่สำเร็จ · ตรวจการเชื่อมต่อ container"});
+}
 function key(x,y){return x+","+y}
 function walkable(x,y){return y>=0&&y<ROWS&&x>=0&&x<COLS&&grid[y][x]!=="#"}
 function transformMap(n){
@@ -334,7 +375,7 @@ function resetActors(){
 async function saveAttempt(cleared){
  if(recording)return profile;
  recording=true;
- try{profile=await api("/api/score",{method:"POST",body:JSON.stringify({name:profile.name,level:level,score:score,cleared:cleared,difficulty:difficulty()})});refreshProgress();renderProfile();return profile}
+ try{profile=await api("/api/score",{method:"POST",body:JSON.stringify({name:profile.name,level:level,score:score,cleared:cleared,difficulty:difficulty()})});refreshProgress();renderProfile();await refreshLeaderboard();return profile}
  catch(error){console.error(error);return null}
 }
 async function finishLevel(cleared){
@@ -380,6 +421,14 @@ function draw(){
  }
  if(paused&&running){ctx.fillStyle="#050816aa";ctx.fillRect(0,0,canvas.width,canvas.height);ctx.fillStyle="#fff";ctx.font="bold 30px system-ui";ctx.textAlign="center";ctx.fillText("PAUSED",canvas.width/2,canvas.height/2)}
 }
+function pauseGame(){if(!running)return;paused=true;$("pauseOverlay").classList.remove("hidden")}
+function resumeGame(){paused=false;$("pauseOverlay").classList.add("hidden")}
+async function exitToHome(){
+ if(!running)return;
+ paused=false;running=false;$("pauseOverlay").classList.add("hidden");
+ if(profile)await saveAttempt(false);
+ showGate();refreshLeaderboard();
+}
 function frame(now){
  if(!last)last=now;
  const dt=Math.min((now-last)/1000,.05);last=now;accumulator+=dt;
@@ -394,19 +443,23 @@ $("loginForm").addEventListener("submit",function(event){
  .catch(function(error){setError($("loginError"),error.message+" · ตรวจว่า container ทำงานอยู่")});
 });
 $("primaryBtn").addEventListener("click",function(){if(overlayAction)overlayAction()});
+$("resumeBtn").addEventListener("click",resumeGame);
+$("exitGameBtn").addEventListener("click",exitToHome);
+$("refreshBoardBtn").addEventListener("click",refreshLeaderboard);
 $("retryBtn").addEventListener("click",function(){overlay.classList.add("hidden");startLevel(level)});
 $("menuBtn").addEventListener("click",showGate);
 $("soundBtn").addEventListener("click",function(){soundOn=!soundOn;$("soundBtn").textContent=soundOn?"🔊 เสียง":"🔇 ปิดเสียง";$("soundBtn").setAttribute("aria-pressed",String(soundOn));if(soundOn)playTone(600,.08,"sine")});
 document.addEventListener("keydown",function(event){
  const map={ArrowUp:"up",w:"up",W:"up",ArrowDown:"down",s:"down",S:"down",ArrowLeft:"left",a:"left",A:"left",ArrowRight:"right",d:"right",D:"right"};
- if(map[event.key]&&running){event.preventDefault();setDirection(map[event.key])}
- else if(event.code==="Space"&&running){event.preventDefault();paused=!paused}
+ if(map[event.key]&&running&&!paused){event.preventDefault();setDirection(map[event.key])}
+ else if(event.code==="Space"&&running){event.preventDefault();if(paused)resumeGame();else pauseGame()}
 });
 document.querySelectorAll("[data-dir]").forEach(function(button){button.addEventListener("pointerdown",function(event){event.preventDefault();setDirection(button.dataset.dir)})});
 const savedName=localStorage.getItem("mazeMunchName");
 if(savedName)$("accountName").value=savedName;
 const savedDifficulty=localStorage.getItem("mazeMunchDifficulty");
 if(savedDifficulty)$("difficulty").value=savedDifficulty;
+refreshLeaderboard();
 requestAnimationFrame(frame);
 })(); 
 </script>
