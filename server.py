@@ -40,11 +40,15 @@ def initialize_database():
                 best_score INTEGER NOT NULL DEFAULT 0,
                 cleared INTEGER NOT NULL DEFAULT 0,
                 attempts INTEGER NOT NULL DEFAULT 0,
+                difficulty TEXT NOT NULL DEFAULT 'normal',
                 updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 PRIMARY KEY (account_name, level),
                 FOREIGN KEY (account_name) REFERENCES accounts(name) ON DELETE CASCADE
             )
         """)
+        columns = {row["name"] for row in db.execute("PRAGMA table_info(level_scores)")}
+        if "difficulty" not in columns:
+            db.execute("ALTER TABLE level_scores ADD COLUMN difficulty TEXT NOT NULL DEFAULT 'normal'")
 
 
 def profile_for(db, name):
@@ -55,7 +59,7 @@ def profile_for(db, name):
     if not account:
         return None
     scores = db.execute(
-        "SELECT level, best_score, cleared, attempts FROM level_scores "
+        "SELECT level, best_score, cleared, attempts, difficulty FROM level_scores "
         "WHERE account_name = ? ORDER BY level",
         (account["name"],),
     ).fetchall()
@@ -69,6 +73,7 @@ def profile_for(db, name):
                 "bestScore": row["best_score"],
                 "cleared": bool(row["cleared"]),
                 "attempts": row["attempts"],
+                "difficulty": row["difficulty"],
             }
             for row in scores
         ],
@@ -161,6 +166,9 @@ class GameHandler(SimpleHTTPRequestHandler):
         except (TypeError, ValueError):
             return self.send_json(400, {"error": "Level and score must be numbers"})
         cleared = bool(data.get("cleared", False))
+        difficulty = str(data.get("difficulty", "normal")).strip().lower()
+        if difficulty not in ("easy", "normal", "hard"):
+            return self.send_json(400, {"error": "Choose easy, normal, or hard"})
         if level < 1 or level > 100 or score < 0 or score > 100000000:
             return self.send_json(400, {"error": "Level or score is out of range"})
         with connect() as db:
@@ -172,13 +180,14 @@ class GameHandler(SimpleHTTPRequestHandler):
             if level > account["unlocked_level"]:
                 return self.send_json(409, {"error": "This level is still locked"})
             db.execute(
-                "INSERT INTO level_scores(account_name, level, best_score, cleared, attempts) "
-                "VALUES (?, ?, ?, ?, 1) "
+                "INSERT INTO level_scores(account_name, level, best_score, cleared, attempts, difficulty) "
+                "VALUES (?, ?, ?, ?, 1, ?) "
                 "ON CONFLICT(account_name, level) DO UPDATE SET "
                 "best_score=MAX(level_scores.best_score, excluded.best_score), "
                 "cleared=MAX(level_scores.cleared, excluded.cleared), "
-                "attempts=level_scores.attempts + 1, updated_at=CURRENT_TIMESTAMP",
-                (name, level, score, int(cleared)),
+                "attempts=level_scores.attempts + 1, difficulty=excluded.difficulty, "
+                "updated_at=CURRENT_TIMESTAMP",
+                (name, level, score, int(cleared), difficulty),
             )
             if cleared:
                 db.execute(
