@@ -7,6 +7,8 @@ A browser-based Pac-Man-style maze game served from a small Python container. Pl
 - Easy, normal, and hard difficulty settings
 - Player-name profiles, saved difficulty, best score per level, attempts, and unlocked stages
 - A next-stage button after clearing a level; each stage changes the maze orientation and makes ghosts faster
+- A global homepage leaderboard, ranked by the sum of each player's best score per level
+- A pause menu with resume and exit-to-home buttons
 - Ghosts use maze pathfinding to chase, ambush, or flee from the player
 - No countdown timer; easy mode gives more lives and slower ghosts
 - Responsive board that fits the browser window, with keyboard and touch controls
