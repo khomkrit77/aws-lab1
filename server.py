@@ -116,6 +116,8 @@ class GameHandler(SimpleHTTPRequestHandler):
         parsed = urlparse(self.path)
         if parsed.path == "/api/health":
             return self.send_json(200, {"ok": True})
+        if parsed.path == "/api/leaderboard":
+            return self.get_leaderboard()
         if parsed.path == "/api/profile":
             name = parse_qs(parsed.query).get("name", [""])[0].strip()
             if not name:
@@ -140,6 +142,30 @@ class GameHandler(SimpleHTTPRequestHandler):
             return self.send_json(400, {"error": str(error)})
         except sqlite3.Error:
             return self.send_json(500, {"error": "Database request failed"})
+
+    def get_leaderboard(self):
+        with connect() as db:
+            rows = db.execute("""
+                SELECT a.name,
+                       COALESCE(SUM(s.best_score), 0) AS total_score,
+                       COALESCE(SUM(s.cleared), 0) AS cleared_levels,
+                       a.unlocked_level
+                FROM accounts AS a
+                LEFT JOIN level_scores AS s ON s.account_name = a.name
+                GROUP BY a.name
+                ORDER BY total_score DESC, cleared_levels DESC, a.name COLLATE NOCASE ASC
+            """).fetchall()
+        leaderboard = [
+            {
+                "rank": index,
+                "name": row["name"],
+                "totalScore": row["total_score"],
+                "clearedLevels": row["cleared_levels"],
+                "unlockedLevel": row["unlocked_level"],
+            }
+            for index, row in enumerate(rows, start=1)
+        ]
+        return self.send_json(200, leaderboard)
 
     def save_profile(self, data):
         name = str(data.get("name", "")).strip()
