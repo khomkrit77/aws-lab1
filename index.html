@@ -116,6 +116,7 @@ kbd{color:#dbe5ff;background:#141e38;border:1px solid #34466e;border-bottom-widt
     <p>ตั้งชื่อผู้เล่น เลือกระดับความยาก แล้วเล่นต่อจากด่านล่าสุดที่ปลดล็อกไว้</p>
     <div class="field"><label for="accountName">ชื่อบัญชีผู้เล่น</label><input id="accountName" name="name" maxlength="24" autocomplete="nickname" placeholder="เช่น account1" required></div>
     <div class="field"><label for="difficulty">ระดับความยาก</label><select id="difficulty" name="difficulty"><option value="easy">ง่าย — ผีช้าลง มี 4 ชีวิต</option><option value="normal" selected>ปกติ — สมดุล มี 3 ชีวิต</option><option value="hard">ยาก — ผีเร็วและไล่แม่น มี 2 ชีวิต</option></select></div>
+    <div class="progress-box" id="progressText">ใช้ชื่อเดิมเพื่อกลับมาเล่นต่อจากด่านที่ปลดล็อกล่าสุด</div>
     <button class="primary" type="submit">เข้าเล่น / เล่นต่อ</button>
     <div class="error" id="loginError" role="status"></div>
     <p class="account-note">เดโมนี้ใช้ชื่อผู้เล่นเพื่อค้นหาคะแนน ไม่มีรหัสผ่าน ข้อมูลจะเก็บในฐานข้อมูลของ container เครื่องนี้</p>
@@ -189,7 +190,7 @@ function initGrid(n){
  }
  if(!start)start={x:10,y:16};
  player={x:start.x,y:start.y,dir:{x:0,y:0},next:{x:0,y:0},progress:0};
- ghosts=spawns.map(function(p,i){return {x:p.x,y:p.y,dir:{x:0,y:-1},progress:0,color:colors[i%colors.length],id:i}});
+ ghosts=spawns.map(function(p,i){return {x:p.x,y:p.y,homeX:p.x,homeY:p.y,dir:{x:0,y:-1},progress:0,color:colors[i%colors.length],id:i}});
  remaining=0;
  for(let y=0;y<ROWS;y++)for(let x=0;x<COLS;x++)if(grid[y][x]==="."||grid[y][x]==="o")remaining++;
  totalPellets=remaining;
@@ -208,25 +209,20 @@ function updateHud(){
  $("bestScore").textContent=String(Math.max(Number($("bestScore").textContent)||0,score));
 }
 function refreshProgress(){
- const lines=(profile.scores||[]).map(function(s){return "ด่าน "+s.level+": "+s.bestScore+" คะแนน"+(s.cleared?" ✓":"")+" ("+s.attempts+" ครั้ง)"});
+ const lines=(profile.scores||[]).map(function(s){return "ด่าน "+s.level+": "+s.bestScore+" คะแนน"+(s.cleared?" ✓":"")+" · "+({easy:"ง่าย",normal:"ปกติ",hard:"ยาก"}[s.difficulty]||"ปกติ")+" · "+s.attempts+" ครั้ง"});
  $("progressText").innerHTML="ปลดล็อกถึงด่าน <strong>"+profile.unlockedLevel+"</strong>"+(lines.length?"<ul class='result-list'>"+lines.map(function(x){return "<li>"+x+"</li>"}).join("")+"</ul>":"<p>ยังไม่มีประวัติคะแนน เริ่มด่าน 1 ได้เลย</p>");
 }
 function showGate(){
  running=false;paused=false;$("gameScreen").classList.add("hidden");$("gate").classList.remove("hidden");
- if(profile){$("accountName").value=profile.name;$("difficulty").value=profile.difficulty}
+ if(profile){$("accountName").value=profile.name;$("difficulty").value=profile.difficulty;refreshProgress()}
 }
 function showGame(){
  $("gate").classList.add("hidden");$("gameScreen").classList.remove("hidden");$("playerBadge").textContent=profile.name+" · "+({easy:"ง่าย",normal:"ปกติ",hard:"ยาก"}[profile.difficulty]);
 }
-function updateLevelOptions(){
- const select=$("levelSelect");select.innerHTML="";
- for(let n=1;n<=profile.unlockedLevel;n++){const option=document.createElement("option");option.value=String(n);option.textContent="ด่าน "+n;select.appendChild(option)}
- select.value=String(profile.unlockedLevel);
-}
-async function enterProfile(name,diff){
+ async function enterProfile(name,diff){
  const result=await api("/api/profile",{method:"POST",body:JSON.stringify({name:name,difficulty:diff})});
  profile=result;localStorage.setItem("mazeMunchName",profile.name);localStorage.setItem("mazeMunchDifficulty",profile.difficulty);
- $("difficulty").value=profile.difficulty;showGame();refreshProgress();updateLevelOptions();renderProfile();
+ $("difficulty").value=profile.difficulty;showGame();refreshProgress();renderProfile();
  startLevel(profile.unlockedLevel);
 }
 function startLevel(n){
@@ -354,7 +350,7 @@ function resetActors(){
 async function saveAttempt(cleared){
  if(recording)return profile;
  recording=true;
- try{profile=await api("/api/score",{method:"POST",body:JSON.stringify({name:profile.name,level:level,score:score,cleared:cleared})});refreshProgress();updateLevelOptions();renderProfile();return profile}
+ try{profile=await api("/api/score",{method:"POST",body:JSON.stringify({name:profile.name,level:level,score:score,cleared:cleared,difficulty:difficulty()})});refreshProgress();renderProfile();return profile}
  catch(error){console.error(error);return null}
 }
 async function finishLevel(cleared){
@@ -364,7 +360,7 @@ async function finishLevel(cleared){
  overlay.classList.remove("hidden");
  const nextUnlocked=saved?saved.unlockedLevel:level;
  $("overlayTitle").textContent=cleared?"ผ่านด่าน "+level+" แล้ว!":"จบเกม";
- $("overlayText").textContent=cleared?"คะแนน "+score+" ถูกบันทึก"+(nextUnlocked>level?" · ด่าน "+(level+1)+" ปลดล็อกแล้ว":"")+".":"คะแนนด่านนี้ "+score+" · ลองอีกครั้งได้ ไม่มีเวลานับถอยหลัง";
+ $("overlayText").textContent=cleared?(saved?"บันทึกคะแนน "+score+" แล้ว":"ผ่านด่านแล้ว แต่บันทึกคะแนนไม่ได้ · ตรวจการเชื่อมต่อ")+(nextUnlocked>level?" · ด่าน "+(level+1)+" ปลดล็อกแล้ว":"")+".":"คะแนนด่านนี้ "+score+(saved?" ถูกบันทึก":" ยังบันทึกไม่ได้")+" · ลองอีกครั้งได้ ไม่มีเวลานับถอยหลัง";
  const primary=$("primaryBtn");
  if(cleared&&nextUnlocked>level){primary.textContent="เล่นด่านต่อไป";overlayAction=function(){startLevel(level+1)};primary.classList.remove("hidden")}
  else{primary.textContent="เล่นด่านนี้อีกครั้ง";overlayAction=function(){startLevel(level)};primary.classList.remove("hidden")}
