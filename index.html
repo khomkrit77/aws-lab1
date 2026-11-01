@@ -1,0 +1,201 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#080b19">
+<title>Maze Munch — Arcade</title>
+<style>
+  :root { color-scheme: dark; --bg:#080b19; --panel:#11182c; --line:#24345d; --blue:#3a7bff; --gold:#ffd84a; --muted:#92a3ca; }
+  * { box-sizing:border-box }
+  body { margin:0; min-height:100vh; display:grid; place-items:center; padding:24px; color:#f5f7ff; background:radial-gradient(ellipse at 50% 0%,#172957 0,#0c1226 48%,var(--bg) 78%); font-family:ui-rounded,"Trebuchet MS",system-ui,sans-serif; }
+  .app { width:min(100%,920px); }
+  header { display:flex; align-items:center; justify-content:space-between; gap:16px; margin:0 0 16px; }
+  .brand { display:flex; align-items:center; gap:12px; }
+  .logo { width:44px; height:44px; display:grid; place-items:center; border-radius:14px; background:linear-gradient(145deg,#ffd94b,#ff9f32); color:#152047; font-size:24px; font-weight:900; box-shadow:0 6px 20px #ffbb3b44; }
+  h1 { font-size:clamp(20px,4vw,28px); letter-spacing:.02em; margin:0; }
+  .subtitle { color:var(--muted); font-size:13px; margin-top:2px; }
+  button { color:inherit; font:inherit; border:1px solid #34466e; background:#182343; border-radius:12px; padding:10px 15px; cursor:pointer; transition:transform .15s,background .15s,border-color .15s; }
+  button:hover { background:#22335e; border-color:#5775b5; transform:translateY(-1px); }
+  button:focus-visible { outline:3px solid #8ab0ff; outline-offset:2px; }
+  .hud { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin-bottom:12px; }
+  .stat { border:1px solid #1d2a4b; background:#10172bce; border-radius:14px; padding:10px 14px; }
+  .stat small { display:block; text-transform:uppercase; letter-spacing:.12em; color:var(--muted); font-size:10px; }
+  .stat strong { display:block; font-size:19px; margin-top:2px; font-variant-numeric:tabular-nums; }
+  .board-shell { position:relative; overflow:hidden; border:1px solid #2e477b; border-radius:18px; background:#050816; box-shadow:0 22px 70px #0008,0 0 45px #2765dc20; }
+  canvas { display:block; width:100%; height:auto; image-rendering:pixelated; }
+  .overlay { position:absolute; inset:0; display:grid; place-items:center; background:#050816b8; backdrop-filter:blur(4px); padding:20px; text-align:center; }
+  .overlay.hidden { display:none; }
+  .card { max-width:360px; padding:26px; border:1px solid #354a7a; border-radius:20px; background:linear-gradient(145deg,#172344,#0e1529); box-shadow:0 14px 50px #0008; }
+  .card h2 { margin:0 0 8px; font-size:30px; }
+  .card p { color:#b8c5e4; line-height:1.55; margin:0 0 18px; }
+  .card button { min-width:150px; border:0; background:linear-gradient(110deg,#ffdc50,#ffa930); color:#171c2d; font-weight:900; }
+  .help { display:flex; align-items:center; justify-content:space-between; gap:14px; color:var(--muted); font-size:12px; padding:12px 2px 0; }
+  .keys { display:flex; gap:5px; align-items:center; }
+  kbd { color:#dbe5ff; background:#141e38; border:1px solid #34466e; border-bottom-width:2px; border-radius:5px; padding:2px 6px; font:inherit; }
+  .mobile { display:none; margin:12px auto 0; width:180px; grid-template-columns:repeat(3,1fr); gap:6px; }
+  .mobile button { min-height:46px; font-size:19px; padding:6px; touch-action:manipulation; }
+  .mobile .up { grid-column:2; } .mobile .left { grid-column:1; grid-row:2; } .mobile .down { grid-column:2; grid-row:2; } .mobile .right { grid-column:3; grid-row:2; }
+  @media (max-width:600px) { body{padding:14px} .help{flex-direction:column;align-items:flex-start} .mobile{display:grid} header{margin-bottom:12px} }
+  @media (prefers-reduced-motion:reduce) { *,*::before,*::after { transition:none!important; } }
+</style>
+</head>
+<body>
+<main class="app">
+  <header>
+    <div class="brand"><div class="logo" aria-hidden="true">◕</div><div><h1>Maze Munch</h1><div class="subtitle">A little arcade maze adventure</div></div></div>
+    <button id="soundBtn" type="button" aria-pressed="true" title="Toggle sound">🔊 Sound</button>
+  </header>
+  <section class="hud" aria-label="Game statistics">
+    <div class="stat"><small>Score</small><strong id="score">00000</strong></div>
+    <div class="stat"><small>Lives</small><strong id="lives">♥ ♥ ♥</strong></div>
+    <div class="stat"><small>Pellets</small><strong id="pellets">0 / 0</strong></div>
+  </section>
+  <div class="board-shell">
+    <canvas id="game" width="560" height="620" aria-label="Maze Munch game board"></canvas>
+    <div class="overlay" id="overlay">
+      <div class="card"><h2 id="overlayTitle">Ready?</h2><p id="overlayText">Collect every glowing dot. Grab a power orb to turn the tables!</p><button id="startBtn" type="button">Start game</button></div>
+    </div>
+  </div>
+  <div class="help"><span>Move with <span class="keys"><kbd>↑</kbd><kbd>←</kbd><kbd>↓</kbd><kbd>→</kbd></span> or <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd>. Press <kbd>Space</kbd> to pause.</span><span>Gold orbs make ghosts flee.</span></div>
+  <div class="mobile" aria-label="Touch controls">
+    <button class="up" data-dir="up" aria-label="Move up">▲</button><button class="left" data-dir="left" aria-label="Move left">◀</button><button class="down" data-dir="down" aria-label="Move down">▼</button><button class="right" data-dir="right" aria-label="Move right">▶</button>
+  </div>
+</main>
+<script>
+(() => {
+  "use strict";
+  const TILE = 28, COLS = 20, ROWS = 22;
+  const raw = [
+    "####################",
+    "#........##........#",
+    "#.##.###.##.###.##..#",
+    "#o##.###.##.###.##o.#",
+    "#..................#",
+    "#.##.#.######.#.##..#",
+    "#....#...##...#.....#",
+    "####.###.##.###.####",
+    "####.#........#.####",
+    "####.#.##GG##.#.####",
+    "..... ..#GG#.. .....",
+    "####.#.######.#.####",
+    "####.#........#.####",
+    "####.#.######.#.####",
+    "#........##........#",
+    "#.##.###.##.###.##..#",
+    "#o.#.....P......#.o.#",
+    "##.#.#.######.#.#.###",
+    "#....#...##...#.....#",
+    "#.######.##.######..#",
+    "#..................#",
+    "####################"
+  ].map(s => s.replaceAll(" ", "."));
+  const canvas = document.getElementById("game"), ctx = canvas.getContext("2d");
+  const scoreEl = document.getElementById("score"), livesEl = document.getElementById("lives"), pelletsEl = document.getElementById("pellets");
+  const overlay = document.getElementById("overlay"), titleEl = document.getElementById("overlayTitle"), textEl = document.getElementById("overlayText");
+  const startBtn = document.getElementById("startBtn"), soundBtn = document.getElementById("soundBtn");
+  const dirs = { up:{x:0,y:-1}, down:{x:0,y:1}, left:{x:-1,y:0}, right:{x:1,y:0} };
+  let grid, player, ghosts, score, lives, remaining, running=false, paused=false, poweredUntil=0, last=0, accumulator=0, soundOn=true, audioCtx=null, mouth=0;
+  function freshGrid() { return raw.map(row => row.split("")); }
+  function walkable(x,y) { return y>=0 && y<ROWS && x>=0 && x<COLS && grid[y][x]!=="#"; }
+  function resetPositions() {
+    player={x:10,y:16,dir:{x:0,y:0},next:{x:0,y:0},progress:0};
+    ghosts=[{x:9,y:10,color:"#ff5b75",dir:{x:0,y:-1},progress:0},{x:10,y:10,color:"#57d5ff",dir:{x:0,y:1},progress:0},{x:11,y:10,color:"#c77dff",dir:{x:0,y:1},progress:0}];
+  }
+  function newGame() {
+    grid=freshGrid(); score=0; lives=3; remaining=0; poweredUntil=0; accumulator=0;
+    for(let y=0;y<ROWS;y++) for(let x=0;x<COLS;x++) if(grid[y][x]==="."||grid[y][x]==="o") remaining++;
+    resetPositions(); updateHud(); running=true; paused=false; overlay.classList.add("hidden"); last=performance.now();
+  }
+  function updateHud() { scoreEl.textContent=String(score).padStart(5,"0"); livesEl.textContent=Array.from({length:3},(_,i)=>i<lives?"♥":"♡").join(" "); pelletsEl.textContent=(remaining===0?"0":String(totalPellets-remaining))+" / "+totalPellets; }
+  const totalPellets = raw.join("").split("").filter(c=>c==="."||c==="o").length;
+  function tone(freq=440,duration=.06,type="sine") {
+    if(!soundOn) return;
+    try { audioCtx ??= new (window.AudioContext||window.webkitAudioContext)(); const o=audioCtx.createOscillator(),g=audioCtx.createGain(); o.type=type;o.frequency.value=freq;g.gain.setValueAtTime(.045,audioCtx.currentTime);g.gain.exponentialRampToValueAtTime(.001,audioCtx.currentTime+duration);o.connect(g);g.connect(audioCtx.destination);o.start();o.stop(audioCtx.currentTime+duration); } catch {}
+  }
+  function setDirection(name) { if(dirs[name] && player) player.next=dirs[name]; }
+  function tileCenter(v) { return v*TILE+TILE/2; }
+  function atCenter(e) { return e.progress===0; }
+  function moveEntity(e,dir,speed,dt) {
+    e.progress += speed*dt;
+    while(e.progress>=TILE) { e.x+=dir.x;e.y+=dir.y;e.progress-=TILE; }
+  }
+  function chooseGhostDir(g) {
+    const options=Object.values(dirs).filter(d=>walkable(g.x+d.x,g.y+d.y) && !(d.x===-g.dir.x&&d.y===-g.dir.y));
+    if(!options.length) return {x:-g.dir.x,y:-g.dir.y};
+    if(Date.now()<poweredUntil) return options.sort((a,b)=>distance(g.x+a.x,g.y+a.y,player.x,player.y)-distance(g.x+b.x,g.y+b.y,player.x,player.y))[0];
+    if(Math.random()<.68) return options.sort((a,b)=>distance(g.x+a.x,g.y+a.y,player.x,player.y)-distance(g.x+b.x,g.y+b.y,player.x,player.y))[0];
+    return options[Math.floor(Math.random()*options.length)];
+  }
+  function distance(x,y,tx,ty) { return Math.abs(x-tx)+Math.abs(y-ty); }
+  function tick(dt) {
+    if(!running||paused) return;
+    mouth+=dt*12;
+    if(atCenter(player)) {
+      if(player.next.x||player.next.y) if(walkable(player.x+player.next.x,player.y+player.next.y)) player.dir=player.next;
+      if(!walkable(player.x+player.dir.x,player.y+player.dir.y)) player.dir={x:0,y:0};
+      const item=grid[player.y][player.x];
+      if(item==="."||item==="o") {
+        grid[player.y][player.x]="."; remaining--; score+=item==="o"?50:10;
+        if(item==="o") { poweredUntil=Date.now()+7000; tone(620,.2,"triangle"); } else tone(420,.035);
+        updateHud();
+        if(remaining===0) endGame(true);
+      }
+    }
+    if(player.dir.x||player.dir.y) moveEntity(player,player.dir,120,dt);
+    for(const g of ghosts) {
+      if(atCenter(g)) g.dir=chooseGhostDir(g);
+      moveEntity(g,g.dir,Date.now()<poweredUntil?72:83,dt);
+      if(distance(g.x,g.y,player.x,player.y)===0 && Math.abs(g.progress-player.progress)<TILE*.68) {
+        if(Date.now()<poweredUntil) { g.x=10;g.y=10;g.progress=0;score+=200;tone(190,.12,"square");updateHud(); }
+        else { lives--;tone(120,.3,"sawtooth");updateHud();if(lives<=0){endGame(false);return;} resetPositions(); }
+      }
+    }
+  }
+  function endGame(won) { running=false; overlay.classList.remove("hidden"); titleEl.textContent=won?"You did it!":"Game over"; textEl.textContent=won?"The maze is clear. Final score: "+score+".":"Final score: "+score+". Ready for another run?"; startBtn.textContent="Play again"; }
+  function drawWall(x,y) {
+    const px=x*TILE,py=y*TILE;
+    ctx.fillStyle="#07112d";ctx.fillRect(px,py,TILE,TILE);
+    ctx.strokeStyle="#3264d9";ctx.lineWidth=2;ctx.strokeRect(px+2,py+2,TILE-4,TILE-4);
+    ctx.fillStyle="#101d40";ctx.fillRect(px+5,py+5,TILE-10,TILE-10);
+  }
+  function draw() {
+    ctx.fillStyle="#050816";ctx.fillRect(0,0,canvas.width,canvas.height);
+    if(!grid) { grid=freshGrid(); }
+    for(let y=0;y<ROWS;y++) for(let x=0;x<COLS;x++) {
+      if(grid[y][x]==="#") drawWall(x,y);
+      else if(grid[y][x]==="."||grid[y][x]==="o") {
+        ctx.beginPath();ctx.fillStyle=grid[y][x]==="o"?"#ffe36e":"#c5d4ff";
+        const r=grid[y][x]==="o"?(5+Math.sin(Date.now()/130)*1.2):2.4;
+        ctx.arc(tileCenter(x),tileCenter(y),r,0,Math.PI*2);ctx.fill();
+      }
+    }
+    if(player) {
+      const x=tileCenter(player.x)+player.dir.x*player.progress, y=tileCenter(player.y)+player.dir.y*player.progress;
+      const angle=Math.atan2(player.dir.y,player.dir.x), open=(Math.sin(mouth)+1)*.15;
+      ctx.beginPath();ctx.fillStyle="#ffda45";ctx.moveTo(x,y);ctx.arc(x,y,11,angle+open,angle+Math.PI*2-open);ctx.closePath();ctx.fill();
+    }
+    if(ghosts) for(const g of ghosts) {
+      const x=tileCenter(g.x)+g.dir.x*g.progress,y=tileCenter(g.y)+g.dir.y*g.progress,fright=Date.now()<poweredUntil;
+      ctx.fillStyle=fright?(poweredUntil-Date.now()<1800&&Math.floor(Date.now()/130)%2?"#f4f6ff":"#406eff"):g.color;
+      ctx.beginPath();ctx.arc(x,y,10,Math.PI,0);ctx.lineTo(x+10,y+9);ctx.lineTo(x+5,y+6);ctx.lineTo(x,y+9);ctx.lineTo(x-5,y+6);ctx.lineTo(x-10,y+9);ctx.closePath();ctx.fill();
+      ctx.fillStyle="#fff";ctx.beginPath();ctx.arc(x-3,y-2,3,0,Math.PI*2);ctx.arc(x+4,y-2,3,0,Math.PI*2);ctx.fill();
+      ctx.fillStyle="#14244b";ctx.beginPath();ctx.arc(x-2,y-2,1.4,0,Math.PI*2);ctx.arc(x+5,y-2,1.4,0,Math.PI*2);ctx.fill();
+    }
+    if(paused&&running) { ctx.fillStyle="#050816aa";ctx.fillRect(0,0,canvas.width,canvas.height);ctx.fillStyle="#fff";ctx.font="bold 32px system-ui";ctx.textAlign="center";ctx.fillText("PAUSED",canvas.width/2,canvas.height/2); }
+  }
+  function frame(now) { const dt=Math.min((now-last)/1000,.05);last=now;accumulator+=dt;while(accumulator>=1/60){tick(1/60);accumulator-=1/60;}draw();requestAnimationFrame(frame); }
+  function togglePause() { if(!running) return;paused=!paused; }
+  document.addEventListener("keydown",e=>{
+    const map={ArrowUp:"up",w:"up",W:"up",ArrowDown:"down",s:"down",S:"down",ArrowLeft:"left",a:"left",A:"left",ArrowRight:"right",d:"right",D:"right"};
+    if(map[e.key]) { e.preventDefault();setDirection(map[e.key]); }
+    else if(e.code==="Space") { e.preventDefault();togglePause(); }
+  });
+  document.querySelectorAll("[data-dir]").forEach(b=>{b.addEventListener("pointerdown",e=>{e.preventDefault();setDirection(b.dataset.dir);});});
+  startBtn.addEventListener("click",newGame);
+  soundBtn.addEventListener("click",()=>{soundOn=!soundOn;soundBtn.textContent=soundOn?"🔊 Sound":"🔇 Sound";soundBtn.setAttribute("aria-pressed",String(soundOn));if(soundOn)tone(600,.08);});
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
